@@ -59,3 +59,24 @@ func ExampleNewSignerFromBase64() {
 	fmt.Println(signer.PublicKeyBase64() != "")
 	// Output: true
 }
+
+func ExampleVerifier_Verify() {
+	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
+	signer, _ := vasign.NewSigner("my-service", "key-1", priv)
+
+	// Client signs a request.
+	body := []byte(`{"amount":100}`)
+	req, _ := http.NewRequest("POST", "https://api.example.com/v1/orders", bytes.NewReader(body))
+	_ = signer.Sign(req)
+
+	// Server verifies the request.
+	verifier := vasign.NewVerifier()
+	vr, err := verifier.Verify(req, pub)
+	if err != nil {
+		// handle error
+		return
+	}
+
+	fmt.Println(vr.ClientID)
+	// Output: my-service
+}
