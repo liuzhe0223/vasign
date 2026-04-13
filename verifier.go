@@ -51,9 +51,10 @@ type VerifierOption func(*Verifier)
 
 // WithTimeWindow sets the maximum allowed age of a request timestamp.
 // Both past and future drift are checked against this window.
+// Set to 0 to disable timestamp checking. Negative values are treated as 0.
 // The default is 5 minutes.
 func WithTimeWindow(d time.Duration) VerifierOption {
-	return func(v *Verifier) { v.timeWindow = d }
+	return func(v *Verifier) { v.timeWindow = max(d, 0) }
 }
 
 // WithMaxBodySize sets the maximum request body size in bytes that the
@@ -82,7 +83,8 @@ func NewVerifier(opts ...VerifierOption) *Verifier {
 // the configured time window, reads the body (up to the configured size limit),
 // reconstructs the canonical signing string, and verifies the signature.
 //
-// After a successful call the request body is still readable.
+// After Verify returns the request body is still readable regardless of
+// whether verification succeeded or failed.
 //
 // Verify does NOT perform key lookup or nonce deduplication — those are
 // application-level concerns. The returned VerifiedRequest provides the
@@ -95,7 +97,20 @@ func (v *Verifier) Verify(req *http.Request, publicKey ed25519.PublicKey) (vr *V
 	signatureRaw := req.Header.Get(HeaderSignature)
 
 	if clientID == "" || keyID == "" || timestampRaw == "" || nonce == "" || signatureRaw == "" {
-		err = ErrMissingHeader
+		missing := ""
+		switch {
+		case clientID == "":
+			missing = HeaderClientID
+		case keyID == "":
+			missing = HeaderKeyID
+		case timestampRaw == "":
+			missing = HeaderTimestamp
+		case nonce == "":
+			missing = HeaderNonce
+		case signatureRaw == "":
+			missing = HeaderSignature
+		}
+		err = fmt.Errorf("%w: %s", ErrMissingHeader, missing)
 		return
 	}
 
@@ -127,6 +142,7 @@ func (v *Verifier) Verify(req *http.Request, publicKey ed25519.PublicKey) (vr *V
 			return
 		}
 		if v.maxBodySize > 0 && int64(len(bodyBytes)) > v.maxBodySize {
+			req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 			err = ErrBodyTooLarge
 			return
 		}
@@ -150,7 +166,8 @@ func (v *Verifier) Verify(req *http.Request, publicKey ed25519.PublicKey) (vr *V
 		hex.EncodeToString(bodyHash[:])
 
 	signature, decErr := base64.StdEncoding.DecodeString(signatureRaw)
-	if decErr != nil || !ed25519.Verify(publicKey, []byte(signingString), signature) {
+	if decErr != nil || len(publicKey) != ed25519.PublicKeySize || len(signature) != ed25519.SignatureSize ||
+		!ed25519.Verify(publicKey, []byte(signingString), signature) {
 		err = ErrInvalidSignature
 		return
 	}
