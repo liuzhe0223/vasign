@@ -1,0 +1,14 @@
+# Binaries
+/keygen
+/cmd/keygen/keygen
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
