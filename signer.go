@@ -1,9 +1,10 @@
 // Package vasign provides Ed25519 HTTP request signing and verification helpers.
 //
-// The signing scheme constructs a canonical string from the request method, path,
-// query string, a Unix timestamp, a random nonce, and the SHA-256 hex digest of
-// the request body, then signs it with Ed25519. Five headers are added to the
-// request: X-Client-Id, X-Key-Id, X-Timestamp, X-Nonce, and X-Signature.
+// The signing scheme constructs a canonical string from the request method,
+// host, path, query string, a Unix timestamp, a random nonce, and the SHA-256
+// hex digest of the request body, then signs it with Ed25519. Five headers are
+// added to the request: X-Client-Id, X-Key-Id, X-Timestamp, X-Nonce, and
+// X-Signature.
 //
 // Signer is safe for concurrent use by multiple goroutines.
 package vasign
@@ -12,7 +13,6 @@ import (
 	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
@@ -116,15 +116,7 @@ func (s *Signer) Sign(req *http.Request) (err error) {
 		return
 	}
 
-	bodyHash := sha256.Sum256(bodyBytes)
-	signingString := req.Method + "\n" +
-		req.URL.EscapedPath() + "\n" +
-		req.URL.RawQuery + "\n" +
-		timestamp + "\n" +
-		nonce + "\n" +
-		hex.EncodeToString(bodyHash[:])
-
-	signature := ed25519.Sign(s.privateKey, []byte(signingString))
+	signature := ed25519.Sign(s.privateKey, []byte(signingString(req, timestamp, nonce, bodyBytes)))
 
 	req.Header.Set(HeaderClientID, s.clientID)
 	req.Header.Set(HeaderKeyID, s.keyID)

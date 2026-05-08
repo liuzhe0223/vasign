@@ -3,9 +3,7 @@ package vasign
 import (
 	"bytes"
 	"crypto/ed25519"
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -19,7 +17,7 @@ var (
 	ErrMissingHeader    = errors.New("vasign: missing required auth header")
 	ErrInvalidTimestamp = errors.New("vasign: invalid timestamp")
 	ErrExpiredTimestamp = errors.New("vasign: timestamp outside allowed window")
-	ErrBodyTooLarge    = errors.New("vasign: request body exceeds size limit")
+	ErrBodyTooLarge     = errors.New("vasign: request body exceeds size limit")
 	ErrInvalidSignature = errors.New("vasign: signature verification failed")
 )
 
@@ -149,25 +147,9 @@ func (v *Verifier) Verify(req *http.Request, publicKey ed25519.PublicKey) (vr *V
 		req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 	}
 
-	bodyHash := sha256.Sum256(bodyBytes)
-
-	path := ""
-	rawQuery := ""
-	if req.URL != nil {
-		path = req.URL.EscapedPath()
-		rawQuery = req.URL.RawQuery
-	}
-
-	signingString := req.Method + "\n" +
-		path + "\n" +
-		rawQuery + "\n" +
-		timestampRaw + "\n" +
-		nonce + "\n" +
-		hex.EncodeToString(bodyHash[:])
-
 	signature, decErr := base64.StdEncoding.DecodeString(signatureRaw)
 	if decErr != nil || len(publicKey) != ed25519.PublicKeySize || len(signature) != ed25519.SignatureSize ||
-		!ed25519.Verify(publicKey, []byte(signingString), signature) {
+		!ed25519.Verify(publicKey, []byte(signingString(req, timestampRaw, nonce, bodyBytes)), signature) {
 		err = ErrInvalidSignature
 		return
 	}

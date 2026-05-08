@@ -312,6 +312,20 @@ func TestVerifyTamperedPath(t *testing.T) {
 	}
 }
 
+func TestVerifyTamperedHost(t *testing.T) {
+	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
+	signer, _ := vasign.NewSigner("c", "k", priv)
+	verifier := vasign.NewVerifier()
+
+	req := signedRequest(t, signer, "GET", "https://example.com/test", nil)
+	req.Host = "evil.example.com"
+
+	_, err := verifier.Verify(req, pub)
+	if !errors.Is(err, vasign.ErrInvalidSignature) {
+		t.Fatalf("expected ErrInvalidSignature for tampered host, got: %v", err)
+	}
+}
+
 func TestVerifyTamperedQuery(t *testing.T) {
 	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
 	signer, _ := vasign.NewSigner("c", "k", priv)

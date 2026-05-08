@@ -41,6 +41,13 @@ func sha256Hex(data []byte) string {
 	return hex.EncodeToString(h[:])
 }
 
+func testHost(req *http.Request) string {
+	if req.Host != "" {
+		return req.Host
+	}
+	return req.URL.Host
+}
+
 func verifySignature(t *testing.T, pub ed25519.PublicKey, req *http.Request, body []byte) {
 	t.Helper()
 	sigBytes, err := base64.StdEncoding.DecodeString(req.Header.Get(vasign.HeaderSignature))
@@ -48,6 +55,7 @@ func verifySignature(t *testing.T, pub ed25519.PublicKey, req *http.Request, bod
 		t.Fatalf("decode signature: %v", err)
 	}
 	signingString := req.Method + "\n" +
+		testHost(req) + "\n" +
 		req.URL.EscapedPath() + "\n" +
 		req.URL.RawQuery + "\n" +
 		req.Header.Get(vasign.HeaderTimestamp) + "\n" +
@@ -287,7 +295,7 @@ func TestSignPercentEncodedPath(t *testing.T) {
 
 	// Must use the escaped path in the signing string.
 	sigBytes, _ := base64.StdEncoding.DecodeString(req.Header.Get(vasign.HeaderSignature))
-	signingString := "GET\n/v1/users/hello%2Fworld\n\n" +
+	signingString := "GET\nexample.com\n/v1/users/hello%2Fworld\n\n" +
 		req.Header.Get(vasign.HeaderTimestamp) + "\n" +
 		req.Header.Get(vasign.HeaderNonce) + "\n" +
 		sha256Hex([]byte{})
@@ -466,6 +474,7 @@ func TestSignConcurrent(t *testing.T) {
 
 			sigBytes, _ := base64.StdEncoding.DecodeString(req.Header.Get(vasign.HeaderSignature))
 			signingString := req.Method + "\n" +
+				testHost(req) + "\n" +
 				req.URL.EscapedPath() + "\n" +
 				req.URL.RawQuery + "\n" +
 				req.Header.Get(vasign.HeaderTimestamp) + "\n" +
@@ -560,7 +569,7 @@ func TestTransportSignsRequests(t *testing.T) {
 	}
 
 	sigBytes, _ := base64.StdEncoding.DecodeString(capturedReq.Header.Get(vasign.HeaderSignature))
-	signingString := "GET\n/v1/test\n\n" +
+	signingString := "GET\n" + capturedReq.Host + "\n/v1/test\n\n" +
 		capturedReq.Header.Get(vasign.HeaderTimestamp) + "\n" +
 		capturedReq.Header.Get(vasign.HeaderNonce) + "\n" +
 		sha256Hex([]byte{})
@@ -599,7 +608,7 @@ func TestTransportWithPostBody(t *testing.T) {
 	}
 
 	sigBytes, _ := base64.StdEncoding.DecodeString(capturedReq.Header.Get(vasign.HeaderSignature))
-	signingString := "POST\n/v1/orders\n\n" +
+	signingString := "POST\n" + capturedReq.Host + "\n/v1/orders\n\n" +
 		capturedReq.Header.Get(vasign.HeaderTimestamp) + "\n" +
 		capturedReq.Header.Get(vasign.HeaderNonce) + "\n" +
 		sha256Hex(body)
